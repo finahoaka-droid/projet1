@@ -100,9 +100,6 @@ INSERT INTO parametre (id_matiere, difference, id_operateur, id_resolution) VALU
 (1, 3.00, 1, 1),
 (1, 3.00, 3, 2);
 
-INSERT INTO parametre (id_matiere, difference, id_operateur, id_resolution) VALUES 
-(2, 6.00, 2, 1);
-
 SELECT * FROM candidat;
 SELECT * FROM correcteur;
 SELECT * FROM matiere;

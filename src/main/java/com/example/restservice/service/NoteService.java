@@ -30,16 +30,12 @@ public class NoteService {
     private OperateurService operateurService;
 
     private static final Map<String, BiPredicate<Double, Double>> OPERATEURS = Map.of(
-            "<", (a, b) -> a < b,
-            "=", (a, b) -> a.equals(b),
-            ">", (a, b) -> a > b
+        "<",  (a, b) -> a < b,
+        "<=", (a, b) -> a <= b,
+        ">",  (a, b) -> a > b,
+        ">=", (a, b) -> a >= b
     );
 
-//     private static final Map<String, BiPredicate<Double, Double>> OPERATEURS = Map.of(
-//         "<",  (a, b) -> a <= b,   // au lieu de strictement <, on prend <=
-//         "=",  (a, b) -> a.equals(b),
-//         ">",  (a, b) -> a >= b    // au lieu de strictement >, on prend >=
-// );
     public List<Note> findAll() {
         return noteRepository.findAll();
     }
@@ -214,13 +210,13 @@ public class NoteService {
         String operateur = operateurOpt.get().getOperateur();
         double parametreDifference = parametre.getDifference().doubleValue();
 
-        if (compare(parametreDifference, calculatedDifference, operateur)) {
-            return resolutionService.findById(parametre.getIdResolution());
-        }
-
-        // if (compare(calculatedDifference, parametreDifference, operateur)) {
+        // if (compare(parametreDifference, calculatedDifference, operateur)) {
         //     return resolutionService.findById(parametre.getIdResolution());
         // }
+
+        if (compare(calculatedDifference, parametreDifference, operateur)) {
+            return resolutionService.findById(parametre.getIdResolution());
+        }
 
         return Optional.empty();
     }
@@ -251,11 +247,11 @@ public class NoteService {
             case "Petite":
                 return getMinNote(idCandidat, idMatiere);
 
-            case "Moyenne":
-                return calculateAverage(idCandidat, idMatiere);
-
             case "Grande":
                 return getMaxNote(idCandidat, idMatiere);
+
+            case "Moyenne":
+                return calculateAverage(idCandidat, idMatiere);
 
             default:
                 return 0.0;
