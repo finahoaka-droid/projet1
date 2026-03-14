@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import java.util.Arrays;
 import java.util.function.BiPredicate;
 
 @Service
@@ -49,19 +50,18 @@ public class NoteService {
     }
 
     public Note update(Long id, Note note) {
-        if (noteRepository.existsById(id)) {
-            note.setIdNote(id);
-            return noteRepository.save(note);
+        if (!noteRepository.existsById(id)) {
+            throw new RuntimeException("Note non trouvée avec l'ID: " + id);
         }
-        throw new RuntimeException("Note non trouvée avec l'ID: " + id);
+        note.setIdNote(id);
+        return noteRepository.save(note);
     }
 
     public void deleteById(Long id) {
-        if (noteRepository.existsById(id)) {
-            noteRepository.deleteById(id);
-        } else {
+        if (!noteRepository.existsById(id)) {
             throw new RuntimeException("Note non trouvée avec l'ID: " + id);
         }
+        noteRepository.deleteById(id);
     }
 
     public List<Note> findByIdCandidat(Long idCandidat) {
@@ -100,103 +100,61 @@ public class NoteService {
         return noteRepository.existsById(id);
     }
 
+    private double[] getNoteValues(Long idCandidat, Long idMatiere) {
+        return findByCandidatAndMatiere(idCandidat, idMatiere)
+                .stream()
+                .mapToDouble(n -> n.getNote().doubleValue())
+                .toArray();
+    }
+
     public double getMinNote(Long idCandidat, Long idMatiere) {
-
-        List<Note> notes = findByCandidatAndMatiere(idCandidat, idMatiere);
-
-        if (notes.isEmpty()) {
-            return 0.0;
-        }
-
-        return notes.stream()
-                .mapToDouble(note -> note.getNote().doubleValue())
+        return Arrays.stream(getNoteValues(idCandidat, idMatiere))
                 .min()
                 .orElse(0.0);
     }
 
     public double getMaxNote(Long idCandidat, Long idMatiere) {
-
-        List<Note> notes = findByCandidatAndMatiere(idCandidat, idMatiere);
-
-        if (notes.isEmpty()) {
-            return 0.0;
-        }
-
-        return notes.stream()
-                .mapToDouble(note -> note.getNote().doubleValue())
+        return Arrays.stream(getNoteValues(idCandidat, idMatiere))
                 .max()
                 .orElse(0.0);
     }
 
     public double calculateDifference(Long idCandidat, Long idMatiere) {
-
-        double maxNote = getMaxNote(idCandidat, idMatiere);
-        double minNote = getMinNote(idCandidat, idMatiere);
-
-        return maxNote - minNote;
+        return getMaxNote(idCandidat, idMatiere) - getMinNote(idCandidat, idMatiere);
     }
 
     public double calculateAverage(Long idCandidat, Long idMatiere) {
-
-        List<Note> notes = findByCandidatAndMatiere(idCandidat, idMatiere);
-
-        if (notes.isEmpty()) {
-            return 0.0;
-        }
-
-        return notes.stream()
-                .mapToDouble(note -> note.getNote().doubleValue())
+        return Arrays.stream(getNoteValues(idCandidat, idMatiere))
                 .average()
                 .orElse(0.0);
     }
 
     public double calculateDifferenceSomme(Long idCandidat, Long idMatiere) {
+        double[] notes = getNoteValues(idCandidat, idMatiere);
 
-        List<Note> notes = findByCandidatAndMatiere(idCandidat, idMatiere);
-
-        if (notes.isEmpty()) {
+        if (notes.length == 0) {
             return 0.0;
         }
 
-        if (notes.size() == 2) {
-            return calculateDifference(idCandidat, idMatiere);
+        if (notes.length == 2) {
+            return Math.abs(notes[0] - notes[1]);
         }
 
-        double[] noteValues = notes.stream()
-                .mapToDouble(note -> note.getNote().doubleValue())
-                .toArray();
+        double total = 0.0;
 
-        double totalDifference = 0.0;
-
-        for (int i = 0; i < noteValues.length; i++) {
-            for (int j = i + 1; j < noteValues.length; j++) {
-                totalDifference += Math.abs(noteValues[i] - noteValues[j]);
+        for (int i = 0; i < notes.length; i++) {
+            for (int j = i + 1; j < notes.length; j++) {
+                total += Math.abs(notes[i] - notes[j]);
             }
         }
 
-        return totalDifference;
+        return total;
     }
 
-    public Optional<Resolution> findResolutionByDifferenceComparison(Long idCandidat, Long idMatiere) {
-
-        double calculatedDifference = calculateDifferenceSomme(idCandidat, idMatiere);
-
-        if (calculatedDifference == 0.0) {
-            return resolutionService.findByNom("Petite");
-        }
-
-        List<Parametre> parametres = parametreService.findByIdMatiere(idMatiere);
-
-        for (Parametre parametre : parametres) {
-
-            Optional<Resolution> resolution = checkParametre(parametre, calculatedDifference);
-
-            if (resolution.isPresent()) {
-                return resolution;
-            }
-        }
-
-        return Optional.empty();
+    private boolean compare(double value1, double value2, String operateur) {
+        return Optional.ofNullable(OPERATEURS.get(operateur))
+                .map(op -> op.test(value1, value2))
+                .orElse(false);
     }
 
     private Optional<Resolution> checkParametre(Parametre parametre, double calculatedDifference) {
@@ -210,10 +168,6 @@ public class NoteService {
         String operateur = operateurOpt.get().getOperateur();
         double parametreDifference = parametre.getDifference().doubleValue();
 
-        // if (compare(parametreDifference, calculatedDifference, operateur)) {
-        //     return resolutionService.findById(parametre.getIdResolution());
-        // }
-
         if (compare(calculatedDifference, parametreDifference, operateur)) {
             return resolutionService.findById(parametre.getIdResolution());
         }
@@ -221,65 +175,103 @@ public class NoteService {
         return Optional.empty();
     }
 
-    private boolean compare(double value1, double value2, String operateur) {
+    public Optional<Resolution> findResolutionByDifferenceComparison(Long idCandidat, Long idMatiere) {
 
-        BiPredicate<Double, Double> operation = OPERATEURS.get(operateur);
+        double difference = calculateDifferenceSomme(idCandidat, idMatiere);
 
-        if (operation == null) {
-            return false;
+        if (difference == 0.0) {
+            return resolutionService.findByNom("Petite");
         }
 
-        return operation.test(value1, value2);
+        List<Parametre> compatibles = findParametresCompatibles(idCandidat, idMatiere);
+
+        if (compatibles.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (compatibles.size() == 1) {
+            return resolutionService.findById(compatibles.get(0).getIdResolution());
+        }
+
+        Optional<Parametre> parametreProche = findParametreLePlusProche(idCandidat, idMatiere);
+
+        return parametreProche.flatMap(p -> resolutionService.findById(p.getIdResolution()));
     }
 
     public double getNoteFinale(Long idCandidat, Long idMatiere, Long idResolution) {
 
         Optional<Resolution> resolutionOpt = resolutionService.findById(idResolution);
 
-        if (!resolutionOpt.isPresent()) {
+        if (resolutionOpt.isEmpty()) {
             return 0.0;
         }
 
-        String nomResolution = resolutionOpt.get().getNom();
-
-        switch (nomResolution) {
-
-            case "Petite":
-                return getMinNote(idCandidat, idMatiere);
-
-            case "Grande":
-                return getMaxNote(idCandidat, idMatiere);
-
-            case "Moyenne":
-                return calculateAverage(idCandidat, idMatiere);
-
-            default:
-                return 0.0;
-        }
+        return switch (resolutionOpt.get().getNom()) {
+            case "Petite" -> getMinNote(idCandidat, idMatiere);
+            case "Grande" -> getMaxNote(idCandidat, idMatiere);
+            case "Moyenne" -> calculateAverage(idCandidat, idMatiere);
+            default -> 0.0;
+        };
     }
 
     public double getNoteFinaleWithZeroDifference(Long idCandidat, Long idMatiere) {
 
-        double calculatedDifference = calculateDifferenceSomme(idCandidat, idMatiere);
+        double difference = calculateDifferenceSomme(idCandidat, idMatiere);
 
-        if (calculatedDifference == 0.0) {
+        if (difference == 0.0) {
+            return Arrays.stream(getNoteValues(idCandidat, idMatiere))
+                    .findFirst()
+                    .orElse(0.0);
+        }
 
-            List<Note> notes = findByCandidatAndMatiere(idCandidat, idMatiere);
+        return findResolutionByDifferenceComparison(idCandidat, idMatiere)
+                .map(r -> getNoteFinale(idCandidat, idMatiere, r.getIdResolution()))
+                .orElse(calculateAverage(idCandidat, idMatiere));
+    }
 
-            if (!notes.isEmpty()) {
-                return notes.get(0).getNote().doubleValue();
+    public List<Parametre> findParametresCompatibles(Long idCandidat, Long idMatiere) {
+
+        double difference = calculateDifferenceSomme(idCandidat, idMatiere);
+
+        List<Parametre> compatibles = new java.util.ArrayList<>();
+
+        for (Parametre p : parametreService.findByIdMatiere(idMatiere)) {
+
+            Optional<Resolution> resolution = checkParametre(p, difference);
+
+            if (resolution.isPresent()) {
+                compatibles.add(p);
             }
-
-            return 0.0;
         }
 
-        Optional<Resolution> resolutionOpt = findResolutionByDifferenceComparison(idCandidat, idMatiere);
+        return compatibles;
+    }
 
-        if (resolutionOpt.isPresent()) {
-            return getNoteFinale(idCandidat, idMatiere, resolutionOpt.get().getIdResolution());
+    public Optional<Parametre> findParametreLePlusProche(Long idCandidat, Long idMatiere) {
+
+        double difference = calculateDifferenceSomme(idCandidat, idMatiere);
+
+        List<Parametre> compatibles = findParametresCompatibles(idCandidat, idMatiere);
+
+        Parametre plusProche = null;
+        double ecartMin = Double.MAX_VALUE;
+
+        for (Parametre p : compatibles) {
+
+            double diffParametre = p.getDifference().doubleValue();
+            double ecart = Math.abs(difference - diffParametre);
+
+            if (ecart < ecartMin) {
+                ecartMin = ecart;
+                plusProche = p;
+            } else if (ecart == ecartMin) {
+                // Si écart identique → prendre le plus petit paramètre
+                if (diffParametre < plusProche.getDifference().doubleValue()) {
+                    plusProche = p;
+                }
+            }
         }
 
-        return calculateAverage(idCandidat, idMatiere);
+        return Optional.ofNullable(plusProche);
     }
 }
-

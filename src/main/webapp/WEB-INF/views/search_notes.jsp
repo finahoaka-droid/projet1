@@ -207,8 +207,7 @@
     <div class="container main-container">
         <div class="page-header">
             <h1>
-                <i class="fas fa-search"></i>
-                Recherche de Notes
+                ETU3611
             </h1>
             <div class="breadcrumb">
                 <a href="<c:url value='/'/>">Accueil</a> / Recherche de Notes
