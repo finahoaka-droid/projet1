@@ -1,6 +1,6 @@
-DROP DATABASE IF EXISTS correction;
-CREATE DATABASE correction;
-\c correction;
+DROP DATABASE IF EXISTS correction2;
+CREATE DATABASE correction2;
+\c correction2;
 
 CREATE TABLE candidat (
     id_candidat SERIAL PRIMARY KEY,

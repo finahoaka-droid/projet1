@@ -1,5 +1,3 @@
-
-
 INSERT INTO candidat (nom, prenom) VALUES
 ('Candidat1','Candidat1'),
 ('Candidat2','Candidat2');
